@@ -6,11 +6,12 @@
 namespace Dapr.Actors.Client
 {
     using System.IO;
+    using System.Text;
+    using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
     using Dapr.Actors.Communication;
     using Dapr.Actors.Communication.Client;
-    using Newtonsoft.Json;
 
     /// <summary>
     /// Provides the base implementation for the proxy to the remote actor objects implementing <see cref="IActor"/> interfaces.
@@ -80,13 +81,12 @@ namespace Dapr.Actors.Client
         public async Task<T> InvokeAsync<T>(string method, object data, CancellationToken cancellationToken = default)
         {
             // TODO: Allow users to provide a custom Serializer.
-            var serializer = new JsonSerializer();
-            var jsonPayload = JsonConvert.SerializeObject(data);
+            using var stream = new MemoryStream();
+            await JsonSerializer.SerializeAsync(stream, data);
+            await stream.FlushAsync();
+            var jsonPayload = Encoding.UTF8.GetString(stream.ToArray());
             var response = await this.actorNonRemotingClient.InvokeActorMethodWithoutRemotingAsync(this.ActorType, this.ActorId.ToString(), method, jsonPayload, cancellationToken);
-
-            using var streamReader = new StreamReader(response);
-            using var reader = new JsonTextReader(streamReader);
-            return serializer.Deserialize<T>(reader);
+            return await JsonSerializer.DeserializeAsync<T>(response);
         }
 
         /// <summary>
@@ -96,10 +96,13 @@ namespace Dapr.Actors.Client
         /// <param name="data">Object argument for actor method.</param>
         /// <param name="cancellationToken">Cancellation Token.</param>
         /// <returns>Response form server.</returns>
-        public Task InvokeAsync(string method, object data, CancellationToken cancellationToken = default)
+        public async Task InvokeAsync(string method, object data, CancellationToken cancellationToken = default)
         {
-            var jsonPayload = JsonConvert.SerializeObject(data);
-            return this.actorNonRemotingClient.InvokeActorMethodWithoutRemotingAsync(this.ActorType, this.ActorId.ToString(), method, jsonPayload, cancellationToken);
+            using var stream = new MemoryStream();
+            await JsonSerializer.SerializeAsync(stream, data, data.GetType());
+            await stream.FlushAsync();
+            var jsonPayload = Encoding.UTF8.GetString(stream.ToArray());
+            await this.actorNonRemotingClient.InvokeActorMethodWithoutRemotingAsync(this.ActorType, this.ActorId.ToString(), method, jsonPayload, cancellationToken);
         }
 
         /// <summary>
@@ -112,11 +115,7 @@ namespace Dapr.Actors.Client
         public async Task<T> InvokeAsync<T>(string method, CancellationToken cancellationToken = default)
         {
             var response = await this.actorNonRemotingClient.InvokeActorMethodWithoutRemotingAsync(this.ActorType, this.ActorId.ToString(), method, null, cancellationToken);
-            var serializer = new JsonSerializer();
-
-            using var streamReader = new StreamReader(response);
-            using var reader = new JsonTextReader(streamReader);
-            return serializer.Deserialize<T>(reader);
+            return await JsonSerializer.DeserializeAsync<T>(response);
         }
 
         /// <summary>

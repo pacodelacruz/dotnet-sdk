@@ -33,7 +33,7 @@ namespace ActorClient
             var actorId = new ActorId("abc");
 
             // Make strongly typed Actor calls with Remoting.
-            // DemoACtor is the type registered with Dapr runtime in the service.
+            // DemoActor is the type registered with Dapr runtime in the service.
             var proxy = ActorProxy.Create<IDemoActor>(actorId, "DemoActor");
             Console.WriteLine("Making call using actor proxy to save data.");
             await proxy.SaveData(data);
@@ -67,6 +67,14 @@ namespace ActorClient
                     Console.WriteLine($"Got Incorrect Exception from actor method invocation. Exception {ex.InnerException}");
                 }
             }
+
+            // Making calls without Remoting, this shows method invocation using InvokeAsync methods, the method name and its payload is provided as arguments to InvokeAsync methods.
+            Console.WriteLine("Making calls without Remoting.");
+            var nonRemotingProxy = ActorProxy.Create(actorId, "DemoActor");
+            await nonRemotingProxy.InvokeAsync("TestNoArgumentNoReturnType");
+            await nonRemotingProxy.InvokeAsync("SaveData", data);
+            var res = await nonRemotingProxy.InvokeAsync<MyData>("GetData");
+
         }
     }
 }
